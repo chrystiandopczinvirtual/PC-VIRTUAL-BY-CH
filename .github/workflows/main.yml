@@ -57,19 +57,21 @@ jobs:
               $retries++
           }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-          
-    
 
-      - name: Spoof VM for Roblox
+      - name: Advanced VM Spoof for Roblox
         run: |
           Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "SystemManufacturer" -Value "Dell Inc."
           Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "SystemProductName" -Value "OptiPlex 7070"
+          Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor\0" -Name "ProcessorNameString" -Value "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz"
+          reg add "HKLM\SOFTWARE\Microsoft\Cryptography" /v "MachineGuid" /t REG_SZ /d "random-guid-here" /f
 
-      - name: Disable Test Mode Restrictions
+      - name: Force Disable Test Mode
         run: |
           bcdedit /set testsigning off
+          bcdedit /set loadoptions DISABLE_INTEGRITY_CHECKS
           reg add "HKLM\System\CurrentControlSet\Control\Session Manager" /v BootExecute /t REG_SZ /d "autocheck autochk *" /f
-          Write-Host "Test Mode desativado!"
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "EnableLUA" /t REG_DWORD /d 0 /f
+          Write-Host "Test Mode completamente desativado!"
 
       - name: Verify RDP Accessibility
         run: |
