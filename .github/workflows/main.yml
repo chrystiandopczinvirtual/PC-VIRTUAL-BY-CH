@@ -79,6 +79,10 @@ jobs:
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
           if (-not $testResult.TcpTestSucceeded) { Write-Error "Failed"; exit 1 }
 
+      - name: Reboot to Apply Test Mode Off
+        run: |
+          shutdown /r /t 10
+      
       - name: Maintain Connection
         run: |
           Write-Host "=== RDP ACCESS ==="
