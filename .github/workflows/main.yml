@@ -44,4 +44,40 @@ jobs:
 
       - name: Establish Tailscale Connection
         run: |
-          & "\( env:ProgramFiles\Tailscale\tailscale.exe" up --authkey= \){{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN
+          & "\( env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=" \){{ secrets.TAILSCALE_AUTH_KEY }}" --hostname="gh-runner-$env:GITHUB_RUN_ID"
+          $tsIP = $null
+          $retries = 0
+          while (-not $tsIP -and $retries -lt 10) {
+              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+              Start-Sleep -Seconds 5
+              $retries++
+          }
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+
+      - name: Spoof VM for Roblox
+        run: |
+          Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "SystemManufacturer" -Value "Dell Inc."
+          Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "SystemProductName" -Value "OptiPlex 7070"
+
+      - name: Disable Test Mode Restrictions
+        run: |
+          bcdedit /set testsigning off
+          reg add "HKLM\System\CurrentControlSet\Control\Session Manager" /v BootExecute /t REG_SZ /d "autocheck autochk *" /f
+          Write-Host "Test Mode desativado!"
+
+      - name: Verify RDP Accessibility
+        run: |
+          Write-Host "Tailscale IP: $env:TAILSCALE_IP"
+          $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
+          if (-not $testResult.TcpTestSucceeded) { Write-Error "Failed"; exit 1 }
+
+      - name: Maintain Connection
+        run: |
+          Write-Host "=== RDP ACCESS ==="
+          Write-Host "Address: $env:TAILSCALE_IP"
+          Write-Host "Username: RDP"
+          Write-Host "Password: $(echo $env:RDP_CREDS)"
+          while ($true) {
+              Write-Host "[$(Get-Date)] RDP Ativo - Sem limites!"
+              Start-Sleep -Seconds 300
+          }
