@@ -44,9 +44,11 @@ jobs:
 
       - name: Establish Tailscale Connection
         shell: pwsh
+        env:
+          TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
           $tailscalePath = "$env:ProgramFiles\Tailscale\tailscale.exe"
-          & \( tailscalePath up --authkey=" \){{ secrets.TAILSCALE_AUTH_KEY }}" --hostname="gh-runner-$env:GITHUB_RUN_ID"
+          & $tailscalePath up --authkey=$env:TS_AUTHKEY --hostname="gh-runner-$env:GITHUB_RUN_ID"
           $tsIP = $null
           $retries = 0
           while (-not $tsIP -and $retries -lt 10) {
@@ -55,6 +57,7 @@ jobs:
               $retries++
           }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+          
     
 
       - name: Spoof VM for Roblox
