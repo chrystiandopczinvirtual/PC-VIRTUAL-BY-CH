@@ -43,16 +43,19 @@ jobs:
           Remove-Item $installerPath -Force
 
       - name: Establish Tailscale Connection
+        shell: pwsh
         run: |
-          & "\( env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=" \){{ secrets.TAILSCALE_AUTH_KEY }}" --hostname="gh-runner-$env:GITHUB_RUN_ID"
+          $tailscalePath = "$env:ProgramFiles\Tailscale\tailscale.exe"
+          & \( tailscalePath up --authkey=" \){{ secrets.TAILSCALE_AUTH_KEY }}" --hostname="gh-runner-$env:GITHUB_RUN_ID"
           $tsIP = $null
           $retries = 0
           while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+              $tsIP = & $tailscalePath ip -4
               Start-Sleep -Seconds 5
               $retries++
           }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+    
 
       - name: Spoof VM for Roblox
         run: |
