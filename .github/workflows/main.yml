@@ -45,7 +45,7 @@ jobs:
           Write-Host "✅ GPU Virtual criada: WARP (D3D11 via software)"
 
       # =============================================
-      # 3. RAM COMPRESSION (SEM PAGEFILE)
+      # 3. RAM COMPRESSION
       # =============================================
       - name: 🧠 RAM Compression
         run: |
@@ -75,11 +75,12 @@ jobs:
           Write-Host "✅ Rede otimizada"
 
       # =============================================
-      # 5. GAME MODE + POWER PLAN
+      # 5. GAME MODE + POWER PLAN (CORRIGIDO)
       # =============================================
       - name: 🎯 Game Mode + Power Plan
         run: |
           Write-Host "=== ATIVANDO GAME MODE ==="
+          New-Item -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Force -ErrorAction SilentlyContinue | Out-Null
           Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AllowAutoGameMode" -Value 1 -Force
           Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Force
           powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 100
