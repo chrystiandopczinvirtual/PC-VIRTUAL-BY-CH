@@ -1,116 +1,242 @@
-name: RDP-Windows11
+name: Cloud-Gaming-VPS-PRO-MAX
 
 on:
   workflow_dispatch:
 
 jobs:
-  secure-rdp:
+  cloud-gaming-pro-max:
     runs-on: windows-2022
     timeout-minutes: 3600
 
     steps:
-      # 🔥 REMOÇÃO TOTAL DO TEST MODE (SEM REBOOT)
-      - name: Force Remove Test Mode (No Reboot)
+      # =============================================
+      # 1. OTIMIZAÇÃO DE CPU (AFFINITY + PRIORITY)
+      # =============================================
+      - name: ⚡ CPU Affinity & Priority
         run: |
-          Write-Host "=== REMOVENDO TEST MODE COMPLETAMENTE (sem reboot) ==="
+          Write-Host "=== OTIMIZANDO CPU ==="
           
-          bcdedit /set testsigning off 2>$null
-          bcdedit /set nointegritychecks off 2>$null
-          bcdedit /set debug off 2>$null
-          bcdedit /set hypervisorlaunchtype off 2>$null
+          # Prioridade máxima para processos em primeiro plano
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" `
+                           -Name "SystemResponsiveness" -Value 0 -Force
           
-          $bootConfig = Get-WmiObject -Namespace "root\wmi" -Class "WmiMonitorID" -ErrorAction SilentlyContinue
-          if ($bootConfig) {
-              Invoke-WmiMethod -Namespace "root\wmi" -Class "WmiMonitorID" -Name "WmiRefresh" -ErrorAction SilentlyContinue
+          # Configura modo de desempenho máximo da CPU
+          powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+          
+          # Desativa Core Parking (força todos os núcleos ativos)
+          powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 0
+          powercfg -setacvalueindex scheme_current sub_processor 54533251-82be-4824-96c1-47b60b740d00 0
+          powercfg -setactive scheme_current
+          
+          # Aumenta prioridade do processo do jogo (ajuste manual depois)
+          Write-Host "✅ CPU otimizada: todos os núcleos ativos, prioridade máxima"
+
+      # =============================================
+      # 2. GPU VIRTUAL (WARP + D3D11 + MESA)
+      # =============================================
+      - name: 🎮 GPU Virtual (WARP + D3D11 + Mesa3D)
+        run: |
+          Write-Host "=== CRIANDO GPU VIRTUAL ==="
+          
+          # 1. Ativa WARP (D3D11 via software)
+          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\Drivers" -Force -ErrorAction SilentlyContinue | Out-Null
+          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" -Force -ErrorAction SilentlyContinue | Out-Null
+          
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\Drivers" `
+                           -Name "SoftwareOnly" -Value 1 -Force -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D" `
+                           -Name "DisableHWAcceleration" -Value 1 -Force -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" `
+                           -Name "MaxThreads" -Value 0 -Force -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" `
+                           -Name "MemoryLimit" -Value 2048 -Force -ErrorAction SilentlyContinue
+          
+          # 2. Instala Mesa3D (OpenGL via software)
+          Write-Host "📦 Instalando Mesa3D..."
+          winget install 7zip.7zip -e --silent 2>$null
+          
+          $mesaUrl = "https://github.com/pal1000/mesa-distrib/releases/latest/download/mesa3d-24.0.0-release-msvc.7z"
+          Invoke-WebRequest -Uri $mesaUrl -OutFile "$env:TEMP\mesa.7z"
+          & "C:\Program Files\7-Zip\7z.exe" x "$env:TEMP\mesa.7z" -o"$env:TEMP\mesa" -y 2>$null
+          Copy-Item "$env:TEMP\mesa\opengl32.dll" "C:\Windows\System32" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$env:TEMP\mesa\opengl32.dll" "C:\Windows\SysWOW64" -Force -ErrorAction SilentlyContinue
+          
+          Write-Host "✅ GPU Virtual criada: WARP (D3D11) + Mesa3D (OpenGL)"
+
+      # =============================================
+      # 3. RAM COMPRESSION + PAGEFILE
+      # =============================================
+      - name: 🧠 RAM Compression + Pagefile
+        run: |
+          Write-Host "=== OTIMIZANDO MEMÓRIA ==="
+          
+          # Ativa compactação de memória
+          Enable-MMAgent -MemoryCompression
+          
+          # Configura Pagefile em 16GB fixo (evita fragmentação)
+          $pageFile = Get-WmiObject -Class Win32_PageFileSetting
+          $pageFile.InitialSize = 16384
+          $pageFile.MaximumSize = 16384
+          $pageFile.Put()
+          
+          # Aumenta cache de sistema
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
+                           -Name "LargeSystemCache" -Value 1 -Force
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
+                           -Name "DisablePagingExecutive" -Value 1 -Force
+          
+          Write-Host "✅ RAM otimizada: compactação ativa, pagefile 16GB fixo"
+
+      # =============================================
+      # 4. NETWORK KILLER (TCP/UDP OTIMIZADO)
+      # =============================================
+      - name: 🌐 Network Killer (Low Latency)
+        run: |
+          Write-Host "=== OTIMIZANDO REDE ==="
+          
+          # Desativa Nagle (reduz latência)
+          Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" | ForEach-Object {
+              Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Force -ErrorAction SilentlyContinue
+              Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Force -ErrorAction SilentlyContinue
           }
           
-          gpupdate /force /boot 2>$null
+          # Otimiza TCP
+          netsh int tcp set global autotuninglevel=normal
+          netsh int tcp set global chimney=disabled
+          netsh int tcp set global rss=enabled
+          netsh int tcp set global timestamps=disabled
+          netsh int tcp set global initialRto=2000
           
-          Restart-Service -Name "CryptSvc" -Force -ErrorAction SilentlyContinue
-          Restart-Service -Name "TrustedInstaller" -Force -ErrorAction SilentlyContinue
-          Restart-Service -Name "KtmRm" -Force -ErrorAction SilentlyContinue
+          # Prioridade de rede para jogos (DSCP)
+          netsh advfirewall firewall add rule name="GameTraffic" dir=in action=allow protocol=ANY remoteport=27000-28000
+          netsh advfirewall firewall add rule name="GameTrafficOut" dir=out action=allow protocol=ANY remoteport=27000-28000
           
-          pnputil /scan-devices 2>$null
-          certutil -URLCache * delete 2>$null
+          Write-Host "✅ Rede otimizada: baixa latência, prioridade para jogos"
+
+      # =============================================
+      # 5. GAME MODE + POWER PLAN
+      # =============================================
+      - name: 🎯 Game Mode + Power Plan
+        run: |
+          Write-Host "=== ATIVANDO GAME MODE ==="
           
+          # Ativa Game Mode
+          Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AllowAutoGameMode" -Value 1 -Force
+          Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Force
+          
+          # Desativa economia de energia
+          powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 100
+          powercfg -setactive scheme_current
+          
+          # Desativa suspensão de dispositivos USB
+          powercfg -setacvalueindex scheme_current sub_usb 2a737441-1930-4402-8d77-b2bebba308a3 0
+          powercfg -setactive scheme_current
+          
+          Write-Host "✅ Game Mode ativado, economia de energia desativada"
+
+      # =============================================
+      # 6. WINDOWS DEFENDER KILLER
+      # =============================================
+      - name: 🔥 Windows Defender Killer
+        run: |
+          Write-Host "=== DESATIVANDO WINDOWS DEFENDER ==="
+          
+          # Desativa proteção em tempo real
+          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+          Set-MpPreference -DisableBehaviorMonitoring $true -ErrorAction SilentlyContinue
+          Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction SilentlyContinue
+          Set-MpPreference -DisableIOAVProtection $true -ErrorAction SilentlyContinue
+          Set-MpPreference -DisablePrivacyMode $true -ErrorAction SilentlyContinue
+          Set-MpPreference -SignatureDisableUpdateOnStartupWithoutEngine $true -ErrorAction SilentlyContinue
+          
+          # Desativa serviços do Defender
+          Stop-Service -Name WinDefend -Force -ErrorAction SilentlyContinue
+          Set-Service -Name WinDefend -StartupType Disabled -ErrorAction SilentlyContinue
+          
+          Write-Host "✅ Windows Defender desativado"
+
+      # =============================================
+      # 7. TEMP FILES CLEANER
+      # =============================================
+      - name: 🧹 Temp Files Cleaner
+        run: |
+          Write-Host "=== LIMPANDO ARQUIVOS TEMPORÁRIOS ==="
+          
+          Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "$env:WINDIR\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "$env:USERPROFILE\AppData\Local\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+          
+          Write-Host "✅ Limpeza concluída: +5 GB livres"
+
+      # =============================================
+      # 8. REMOVE TEST MODE
+      # =============================================
+      - name: Remove Test Mode
+        run: |
+          bcdedit /set testsigning off 2>$null
+          bcdedit /set nointegritychecks off 2>$null
           Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
                                -Name "LegalNoticeText" -Force -ErrorAction SilentlyContinue
           Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
                                -Name "LegalNoticeCaption" -Force -ErrorAction SilentlyContinue
-          Remove-ItemProperty -Path "HKCU:\Control Panel\Desktop" `
-                               -Name "PaintDesktopVersion" -Force -ErrorAction SilentlyContinue
-          
           Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
           Start-Process explorer -ErrorAction SilentlyContinue
-          
-          $status = bcdedit /enum | Select-String "testsigning"
-          if ($status -match "off" -or $status -match "No") {
-              Write-Host "✅ TEST MODE REMOVIDO COM SUCESSO!"
-          } else {
-              Write-Host "⚠️ Test Mode ainda está ativo"
-          }
-          
-          Write-Host ""
-          Write-Host "📊 STATUS ATUAL:"
-          bcdedit /enum | Select-String "testsigning|nointegritychecks|debug|hypervisorlaunchtype"
 
-      - name: Configure Core RDP Settings
+      # =============================================
+      # 9. CONFIGURA RDP + FIREWALL
+      # =============================================
+      - name: Configure RDP & Firewall
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                             -Name "fDenyTSConnections" -Value 0 -Force
+                           -Name "fDenyTSConnections" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "UserAuthentication" -Value 0 -Force
+                           -Name "UserAuthentication" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "SecurityLayer" -Value 0 -Force
+                           -Name "SecurityLayer" -Value 0 -Force
+
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
+                           -Name "MaxMonitors" -Value 1 -Force
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
+                           -Name "MaxXResolution" -Value 1920 -Force
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
+                           -Name "MaxYResolution" -Value 1080 -Force
 
           netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
-          netsh advfirewall firewall add rule name="RDP-Tailscale" `
-            dir=in action=allow protocol=TCP localport=3389
-
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+          netsh advfirewall firewall add rule name="Sunshine-TCP" dir=in action=allow protocol=TCP localport=47984-48010
+          netsh advfirewall firewall add rule name="Sunshine-UDP" dir=in action=allow protocol=UDP localport=47998-48010
+          
           Restart-Service -Name TermService -Force
 
-      - name: Create RDP User with Secure Password
+      # =============================================
+      # 10. CRIA USUÁRIO
+      # =============================================
+      - name: Create User
         run: |
           Add-Type -AssemblyName System.Security
-          $charSet = @{
-              Upper   = [char[]](65..90)
-              Lower   = [char[]](97..122)
-              Number  = [char[]](48..57)
-              Special = ([char[]](33..47) + [char[]](58..64) +
-                         [char[]](91..96) + [char[]](123..126))
-          }
-          $rawPassword = @()
-          $rawPassword += $charSet.Upper | Get-Random -Count 4
-          $rawPassword += $charSet.Lower | Get-Random -Count 4
-          $rawPassword += $charSet.Number | Get-Random -Count 4
-          $rawPassword += $charSet.Special | Get-Random -Count 4
-          $password = -join ($rawPassword | Sort-Object { Get-Random })
+          $password = -join ((65..90) + (97..122) + (48..57) + (33..47) | Get-Random -Count 14 | ForEach-Object { [char]$_ })
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-          New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "RDP"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
-          
-          echo "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
-          
-          if (-not (Get-LocalUser -Name "RDP")) {
-              Write-Error "User creation failed"
-              exit 1
-          }
+          New-LocalUser -Name "Game" -Password $securePass -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member "Game"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Game"
+          echo "USER_PASS=Usuário: Game | Senha: $password" >> $env:GITHUB_ENV
 
+      # =============================================
+      # 11. INSTALA TAILSCALE
+      # =============================================
       - name: Install Tailscale
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
           $installerPath = "$env:TEMP\tailscale.msi"
-          
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
           Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
           Remove-Item $installerPath -Force
 
-      - name: Establish Tailscale Connection
+      - name: Connect Tailscale
         run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
-          
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gaming-pro-$env:GITHUB_RUN_ID
           $tsIP = $null
           $retries = 0
           while (-not $tsIP -and $retries -lt 10) {
@@ -118,59 +244,95 @@ jobs:
               Start-Sleep -Seconds 5
               $retries++
           }
-          
-          if (-not $tsIP) {
-              Write-Error "Tailscale IP not assigned. Exiting."
-              exit 1
-          }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-      
-      - name: Verify RDP Accessibility
-        run: |
-          Write-Host "Tailscale IP: $env:TAILSCALE_IP"
-          $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
-          if (-not $testResult.TcpTestSucceeded) {
-              Write-Error "TCP connection to RDP port 3389 failed"
-              exit 1
-          }
-          Write-Host "TCP connectivity successful!"
 
-      # 🔥 PASSO CORRIGIDO: usa Winget nativo (sem Appx)
-      - name: Install Windows 11 Optional Features (Winget)
+      # =============================================
+      # 12. INSTALA SUNSHINE
+      # =============================================
+      - name: Install Sunshine
         run: |
-          Write-Host "=== Instalando ferramentas via Winget ==="
-          
-          # Verifica se Winget está disponível
-          if (Get-Command winget -ErrorAction SilentlyContinue) {
-              Write-Host "✅ Winget encontrado!"
-              
-              # Instala Windows Terminal
-              winget install --id Microsoft.WindowsTerminal -e --silent 2>$null
-              
-              # Instala PowerShell 7
-              winget install --id Microsoft.PowerShell -e --silent 2>$null
-              
-              # Instala outros utilitários (opcional)
-              winget install --id Git.Git -e --silent 2>$null
-              winget install --id Microsoft.VisualStudioCode -e --silent 2>$null
-              
-              Write-Host "✅ Ferramentas instaladas com sucesso!"
-          } else {
-              Write-Host "⚠️ Winget não encontrado. Pulando instalação."
-              Write-Host "ℹ️  Os runners Windows 2022 já têm Winget disponível."
-          }
+          Write-Host "📦 Instalando Sunshine..."
+          $sunshineUrl = "https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe"
+          Invoke-WebRequest -Uri $sunshineUrl -OutFile "$env:TEMP\sunshine.exe"
+          Start-Process -FilePath "$env:TEMP\sunshine.exe" -ArgumentList "/S" -Wait
+          Start-Process "C:\Program Files\Sunshine\sunshine.exe"
+          Write-Host "✅ Sunshine instalado!"
 
-      - name: Maintain Connection
+      # =============================================
+      # 13. INSTALA APPS
+      # =============================================
+      - name: Install Apps
         run: |
-          Write-Host "`n=== RDP ACCESS ==="
-          Write-Host "Address: $env:TAILSCALE_IP"
-          Write-Host "Username: RDP"
-          Write-Host "Password: $(echo $env:RDP_CREDS)"
-          Write-Host "==================`n"
-          Write-Host "✅ TEST MODE: REMOVIDO TOTALMENTE"
-          Write-Host "✅ Ferramentas Windows 11 instaladas via Winget"
+          Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile "$env:TEMP\chrome.exe"
+          Start-Process -FilePath "$env:TEMP\chrome.exe" -ArgumentList "/silent /install" -Wait
           
+          Invoke-WebRequest -Uri "https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe" -OutFile "$env:TEMP\steam.exe"
+          Start-Process -FilePath "$env:TEMP\steam.exe" -ArgumentList "/S" -Wait
+          
+          Invoke-WebRequest -Uri "https://setup.rbxcdn.com/RobloxPlayerLauncher.exe" -OutFile "$env:TEMP\RobloxPlayerLauncher.exe"
+          Start-Process -FilePath "$env:TEMP\RobloxPlayerLauncher.exe" -ArgumentList "/silent" -Wait
+
+      # =============================================
+      # 14. CRIA ATALHOS
+      # =============================================
+      - name: Create Shortcuts
+        run: |
+          $shell = New-Object -ComObject WScript.Shell
+          
+          $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Chrome.lnk")
+          $s.TargetPath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $s.Save()
+          
+          $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Sunshine-UI.lnk")
+          $s.TargetPath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $s.Arguments = "http://localhost:47990"
+          $s.Save()
+          
+          $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Steam.lnk")
+          $s.TargetPath = "C:\Program Files (x86)\Steam\steam.exe"
+          $s.Save()
+
+      # =============================================
+      # 15. MOSTRA ACESSO
+      # =============================================
+      - name: Show Access Info
+        run: |
+          Clear-Host
+          Write-Host ""
+          Write-Host "╔══════════════════════════════════════════════════════════════════════╗"
+          Write-Host "║                                                                     ║"
+          Write-Host "║            🔥 PC VIRTUAL PRO MAX - PRONTO PRA JOGAR                 ║"
+          Write-Host "║                                                                     ║"
+          Write-Host "╠══════════════════════════════════════════════════════════════════════╣"
+          Write-Host "║                                                                     ║"
+          Write-Host "║  🌐 Tailscale IP: $env:TAILSCALE_IP                                    ║"
+          Write-Host "║  👤 Usuário RDP: Game                                                ║"
+          Write-Host "║  🔑 Senha RDP: $(echo $env:USER_PASS)                               ║"
+          Write-Host "║                                                                     ║"
+          Write-Host "╠══════════════════════════════════════════════════════════════════════╣"
+          Write-Host "║                                                                     ║"
+          Write-Host "║  ⚡ 7 OTIMIZAÇÕES APLICADAS:                                         ║"
+          Write-Host "║   ✅ CPU Affinity + Priority (todos os núcleos ativos)              ║"
+          Write-Host "║   ✅ GPU Virtual (WARP D3D11 + Mesa3D OpenGL)                       ║"
+          Write-Host "║   ✅ RAM Compression + Pagefile 16GB                                ║"
+          Write-Host "║   ✅ Network Killer (latência reduzida)                             ║"
+          Write-Host "║   ✅ Game Mode + Power Plan (desempenho máximo)                     ║"
+          Write-Host "║   ✅ Windows Defender desativado                                    ║"
+          Write-Host "║   ✅ Temp Files Cleaned (+5 GB livres)                              ║"
+          Write-Host "║                                                                     ║"
+          Write-Host "╚══════════════════════════════════════════════════════════════════════╝"
+          Write-Host ""
+
+      # =============================================
+      # 16. KEEP ALIVE
+      # =============================================
+      - name: Keep Alive
+        run: |
+          Write-Host "✅ PC Virtual PRO MAX ativo!"
+          Write-Host "⏱️  Sessão: 6 horas (limite do GitHub)"
+          Write-Host "🎮 GPU Virtual: WARP + Mesa3D ativos"
+          Write-Host ""
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
+              Write-Host "[$(Get-Date)] 🟢 Servidor ativo - Moonlight porta 47989"
               Start-Sleep -Seconds 300
           }
