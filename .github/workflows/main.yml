@@ -150,66 +150,8 @@ jobs:
           }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
 
-      # =============================================
-      # INSTALA SUNSHINE (CORRIGIDO)
-      # =============================================
-      - name: Install Sunshine
-        run: |
-          Write-Host "📦 Instalando Sunshine..."
-          $url = "https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe"
-          $out = "$env:TEMP\sunshine.exe"
-          
-          # Usa curl.exe (mais confiável)
-          curl.exe -L -o $out $url
-          
-          if (-not (Test-Path $out)) {
-              Write-Error "Falha no download do Sunshine"
-              exit 1
-          }
-          
-          Start-Process -FilePath $out -ArgumentList "/S" -Wait
-          Start-Process "C:\Program Files\Sunshine\sunshine.exe"
-          Write-Host "✅ Sunshine instalado!"
 
-      - name: Install Apps
-        run: |
-          Write-Host "📦 Instalando Chrome..."
-          Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile "$env:TEMP\chrome.exe"
-          Start-Process -FilePath "$env:TEMP\chrome.exe" -ArgumentList "/silent /install" -Wait
-          
-          Write-Host "📦 Instalando Steam..."
-          Invoke-WebRequest -Uri "https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe" -OutFile "$env:TEMP\steam.exe"
-          Start-Process -FilePath "$env:TEMP\steam.exe" -ArgumentList "/S" -Wait
-          
-          Write-Host "📦 Instalando Roblox..."
-          Invoke-WebRequest -Uri "https://setup.rbxcdn.com/RobloxPlayerLauncher.exe" -OutFile "$env:TEMP\RobloxPlayerLauncher.exe"
-          Start-Process -FilePath "$env:TEMP\RobloxPlayerLauncher.exe" -ArgumentList "/silent" -Wait
-          
-          Write-Host "✅ Apps instalados!"
-
-      - name: Create Shortcuts
-        run: |
-          $shell = New-Object -ComObject WScript.Shell
-          $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Chrome.lnk")
-          $s.TargetPath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $s.Save()
-          $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Sunshine-UI.lnk")
-          $s.TargetPath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $s.Arguments = "http://localhost:47990"
-          $s.Save()
-          $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Steam.lnk")
-          $s.TargetPath = "C:\Program Files (x86)\Steam\steam.exe"
-          $s.Save()
-          $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Roblox.lnk")
-          $s.TargetPath = "C:\Program Files (x86)\Roblox\Versions\RobloxPlayerBeta.exe"
-          $s.Save()
-          Write-Host "✅ Atalhos criados!"
-
-      - name: Show Access Info
-        run: |
-          Clear-Host
-          Write-Host ""
-          Write-Host "╔══════════════════════════════════════════════════════════════════════╗"
+ "╔══════════════════════════════════════════════════════════════════════╗"
           Write-Host "║                                                                     ║"
           Write-Host "║            🔥 PC VIRTUAL PRO MAX - PRONTO PRA JOGAR                 ║"
           Write-Host "║                                                                     ║"
