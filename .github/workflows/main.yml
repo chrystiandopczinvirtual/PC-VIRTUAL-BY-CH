@@ -68,15 +68,19 @@ jobs:
         Write-Host "Tailscale IP: $tsIP" -ForegroundColor Green
         echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
         
-    - name: Install Essential Software
+    - name: Install Essential Software (Chocolatey)
       run: |
-        Write-Host "Installing essential software..." -ForegroundColor Green
+        Write-Host "Installing Chocolatey..." -ForegroundColor Green
         Set-ExecutionPolicy Bypass -Scope Process -Force
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
         iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        
+        Write-Host "Installing Google Chrome..." -ForegroundColor Green
         choco install googlechrome -y
+        
+        Write-Host "Installing 7-Zip..." -ForegroundColor Green
         choco install 7zip -y
-        choco install notepadplusplus -y
+        
         Write-Host "Software installation completed!" -ForegroundColor Green
         
     - name: Connection Details
