@@ -68,20 +68,27 @@ jobs:
         Write-Host "Tailscale IP: $tsIP" -ForegroundColor Green
         echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
         
-    - name: Install Essential Software (Chocolatey)
+    - name: Install Google Chrome (Direct)
       run: |
-        Write-Host "Installing Chocolatey..." -ForegroundColor Green
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        Write-Host "Downloading Google Chrome..." -ForegroundColor Green
+        $chromeUrl = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
+        $installerPath = "$env:TEMP\chrome_installer.exe"
+        Invoke-WebRequest -Uri $chromeUrl -OutFile $installerPath
+        Write-Host "Installing Google Chrome silently..." -ForegroundColor Green
+        Start-Process -FilePath $installerPath -ArgumentList "/silent /install" -Wait
+        Remove-Item $installerPath -Force
+        Write-Host "Google Chrome installed!" -ForegroundColor Green
         
-        Write-Host "Installing Google Chrome..." -ForegroundColor Green
-        choco install googlechrome -y
-        
-        Write-Host "Installing 7-Zip..." -ForegroundColor Green
-        choco install 7zip -y
-        
-        Write-Host "Software installation completed!" -ForegroundColor Green
+    - name: Install 7-Zip (Direct)
+      run: |
+        Write-Host "Downloading 7-Zip..." -ForegroundColor Green
+        $zipUrl = "https://www.7-zip.org/a/7z2409-x64.exe"
+        $installerPath = "$env:TEMP\7z-installer.exe"
+        Invoke-WebRequest -Uri $zipUrl -OutFile $installerPath
+        Write-Host "Installing 7-Zip silently..." -ForegroundColor Green
+        Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
+        Remove-Item $installerPath -Force
+        Write-Host "7-Zip installed!" -ForegroundColor Green
         
     - name: Connection Details
       run: |
