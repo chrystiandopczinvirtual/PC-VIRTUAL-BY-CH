@@ -45,26 +45,17 @@ jobs:
           Write-Host "✅ GPU Virtual criada: WARP (D3D11 via software)"
 
       # =============================================
-      # 3. RAM COMPRESSION + PAGEFILE (CORRIGIDO)
+      # 3. RAM COMPRESSION (SEM PAGEFILE)
       # =============================================
-      - name: 🧠 RAM Compression + Pagefile
+      - name: 🧠 RAM Compression
         run: |
           Write-Host "=== OTIMIZANDO MEMÓRIA ==="
-          
-          # Ativa compactação de memória
           Enable-MMAgent -MemoryCompression
-          
-          # Configura Pagefile via wmic (mais confiável)
-          wmic pagefileset create name="C:\\pagefile.sys" 2>$null
-          wmic pagefileset where name="C:\\pagefile.sys" set InitialSize=16384,MaximumSize=16384
-          
-          # Aumenta cache de sistema
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
                            -Name "LargeSystemCache" -Value 1 -Force
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
                            -Name "DisablePagingExecutive" -Value 1 -Force
-          
-          Write-Host "✅ RAM otimizada: compactação ativa, pagefile 16GB fixo"
+          Write-Host "✅ RAM otimizada: compactação ativa"
 
       # =============================================
       # 4. NETWORK KILLER
@@ -273,7 +264,7 @@ jobs:
           Write-Host "║  ⚡ OTIMIZAÇÕES APLICADAS:                                           ║"
           Write-Host "║   ✅ CPU Affinity + Priority                                        ║"
           Write-Host "║   ✅ GPU Virtual (WARP D3D11)                                       ║"
-          Write-Host "║   ✅ RAM Compression + Pagefile 16GB                                ║"
+          Write-Host "║   ✅ RAM Compression                                                ║"
           Write-Host "║   ✅ Network Killer (latência reduzida)                             ║"
           Write-Host "║   ✅ Game Mode + Power Plan                                         ║"
           Write-Host "║   ✅ Windows Defender desativado                                    ║"
