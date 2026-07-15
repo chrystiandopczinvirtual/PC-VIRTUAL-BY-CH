@@ -1,207 +1,135 @@
-name: RDP-Otimizado
+name: EnigMano Instance Deployment
 
 on:
   workflow_dispatch:
+    inputs:
+      instance_number:
+        description: 'Instance Number (1-10)'
+        required: true
+        default: '1'
+        type: string
 
 jobs:
-  rdp:
-    runs-on: windows-2022
-    timeout-minutes: 3600
-
+  deploy-rdp:
+    runs-on: windows-latest
+    timeout-minutes: 360
+    
     steps:
-      - name: ⚡ CPU Affinity & Priority
-        run: |
-          Write-Host "=== OTIMIZANDO CPU ==="
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" `
-                           -Name "SystemResponsiveness" -Value 0 -Force
-          powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 0
-          powercfg -setacvalueindex scheme_current sub_processor 54533251-82be-4824-96c1-47b60b740d00 0
-          powercfg -setactive scheme_current
-          Write-Host "✅ CPU otimizada"
-
-      - name: 🎮 GPU Virtual (WARP + D3D11)
-        run: |
-          Write-Host "=== CRIANDO GPU VIRTUAL ==="
-          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\Drivers" -Force -ErrorAction SilentlyContinue | Out-Null
-          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" -Force -ErrorAction SilentlyContinue | Out-Null
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\Drivers" `
-                           -Name "SoftwareOnly" -Value 1 -Force -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D" `
-                           -Name "DisableHWAcceleration" -Value 1 -Force -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" `
-                           -Name "MaxThreads" -Value 0 -Force -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" `
-                           -Name "MemoryLimit" -Value 2048 -Force -ErrorAction SilentlyContinue
-          Write-Host "✅ GPU Virtual criada: WARP (D3D11 via software)"
-
-      - name: 🧠 RAM Compression
-        run: |
-          Write-Host "=== OTIMIZANDO MEMÓRIA ==="
-          Enable-MMAgent -MemoryCompression
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
-                           -Name "LargeSystemCache" -Value 1 -Force
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
-                           -Name "DisablePagingExecutive" -Value 1 -Force
-          Write-Host "✅ RAM otimizada: compactação ativa"
-
-      - name: 🌐 Network Killer (Low Latency)
-        run: |
-          Write-Host "=== OTIMIZANDO REDE ==="
-          Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" | ForEach-Object {
-              Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Force -ErrorAction SilentlyContinue
-              Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Force -ErrorAction SilentlyContinue
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: System Information
+      run: |
+        Write-Host "=== ENIGMANO RDP DEPLOYMENT ===" -ForegroundColor Green
+        Write-Host "Instance Number: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
+        Write-Host "Runner: $env:RUNNER_NAME" -ForegroundColor Yellow
+        Write-Host "Workflow: $env:GITHUB_WORKFLOW" -ForegroundColor Yellow
+        
+        Write-Host "`n=== SYSTEM SPECIFICATIONS ===" -ForegroundColor Cyan
+        Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory
+        Get-WmiObject -Class Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
+        
+    - name: Enable RDP
+      run: |
+        Write-Host "Enabling Remote Desktop..." -ForegroundColor Green
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+        
+    - name: Create User Account
+      run: |
+        Write-Host "Setting up user account..." -ForegroundColor Green
+        $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
+        Set-LocalUser -Name "runneradmin" -Password $Password
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
+        Write-Host "Username: runneradmin" -ForegroundColor Yellow
+        Write-Host "Password: P@ssw0rd!" -ForegroundColor Yellow
+        
+    - name: Download and Setup ngrok
+      run: |
+        Write-Host "Downloading ngrok..." -ForegroundColor Green
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive ngrok.zip -DestinationPath C:\ngrok
+        
+    - name: Configure ngrok
+      run: |
+        Write-Host "Configuring ngrok..." -ForegroundColor Green
+        C:\ngrok\ngrok.exe config add-authtoken ${{ secrets.NGROK_SHAHZAIB }}
+        
+    - name: Install Essential Software
+      run: |
+        Write-Host "Installing essential software..." -ForegroundColor Green
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        choco install googlechrome -y
+        choco install 7zip -y
+        choco install notepadplusplus -y
+        Write-Host "Software installation completed!" -ForegroundColor Green
+        
+    - name: Start ngrok Tunnel
+      run: |
+        Write-Host "Starting ngrok tunnel..." -ForegroundColor Green
+        Start-Process -FilePath "C:\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+        Start-Sleep -Seconds 10
+        
+    - name: Get Connection Details
+      run: |
+        Write-Host "`n=== CONNECTION DETAILS ===" -ForegroundColor Green
+        try {
+          $ngrokApi = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
+          $publicUrl = $ngrokApi.tunnels[0].public_url
+          $host = $publicUrl -replace "tcp://", ""
+          
+          Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         ENIGMANO RDP ACCESS          ║" -ForegroundColor Cyan  
+          Write-Host "╠══════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║ Host: $host" -ForegroundColor White
+          Write-Host "║ Username: runneradmin                ║" -ForegroundColor White
+          Write-Host "║ Password: P@ssw0rd!                  ║" -ForegroundColor White
+          Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Cyan
+          
+          Write-Host "`nConnection Instructions:" -ForegroundColor Yellow
+          Write-Host "1. Open Remote Desktop Connection" -ForegroundColor White
+          Write-Host "2. Enter the host address above" -ForegroundColor White
+          Write-Host "3. Use the provided credentials" -ForegroundColor White
+          Write-Host "4. IMPORTANT: Minimize (don't close) this window to keep connection alive!" -ForegroundColor Red
+          
+        } catch {
+          Write-Host "Error getting ngrok details. Checking manually..." -ForegroundColor Red
+          Start-Sleep -Seconds 5
+          try {
+            $ngrokApi = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
+            $publicUrl = $ngrokApi.tunnels[0].public_url
+            Write-Host "Manual check - ngrok URL: $publicUrl" -ForegroundColor Green
+          } catch {
+            Write-Host "ngrok API not accessible. Please check ngrok status manually." -ForegroundColor Red
           }
-          netsh int tcp set global autotuninglevel=normal
-          netsh int tcp set global chimney=disabled
-          netsh int tcp set global rss=enabled
-          netsh int tcp set global timestamps=disabled
-          netsh int tcp set global initialRto=2000
-          Write-Host "✅ Rede otimizada"
-
-      - name: 🎯 Game Mode + Power Plan
-        run: |
-          Write-Host "=== ATIVANDO GAME MODE ==="
-          New-Item -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Force -ErrorAction SilentlyContinue | Out-Null
-          Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AllowAutoGameMode" -Value 1 -Force
-          Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Force
-          powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 100
-          powercfg -setactive scheme_current
-          Write-Host "✅ Game Mode ativado"
-
-      - name: 🔥 Windows Defender Killer
-        run: |
-          Write-Host "=== DESATIVANDO WINDOWS DEFENDER ==="
-          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
-          Set-MpPreference -DisableBehaviorMonitoring $true -ErrorAction SilentlyContinue
-          Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction SilentlyContinue
-          Set-MpPreference -DisableIOAVProtection $true -ErrorAction SilentlyContinue
-          Stop-Service -Name WinDefend -Force -ErrorAction SilentlyContinue
-          Set-Service -Name WinDefend -StartupType Disabled -ErrorAction SilentlyContinue
-          Write-Host "✅ Windows Defender desativado"
-
-      - name: 🧹 Temp Files Cleaner
-        run: |
-          Write-Host "=== LIMPANDO ARQUIVOS TEMPORÁRIOS ==="
-          Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
-          Remove-Item -Path "$env:WINDIR\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
-          Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-          Write-Host "✅ Limpeza concluída"
-
-      - name: Remove Test Mode
-        run: |
-          bcdedit /set testsigning off 2>$null
-          bcdedit /set nointegritychecks off 2>$null
-          Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
-                               -Name "LegalNoticeText" -Force -ErrorAction SilentlyContinue
-          Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
-                               -Name "LegalNoticeCaption" -Force -ErrorAction SilentlyContinue
-          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
-          Start-Process explorer -ErrorAction SilentlyContinue
-
-      # =============================================
-      # 🔥 DESATIVA O FIREWALL (GARANTE RDP)
-      # =============================================
-      - name: 🔥 Desativar Firewall (RDP liberado)
-        run: |
-          Write-Host "=== DESATIVANDO FIREWALL ==="
-          netsh advfirewall set allprofiles state off
-          Write-Host "✅ Firewall desativado (todas as portas liberadas)"
-
-      - name: Configure RDP
-        run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                           -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                           -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                           -Name "SecurityLayer" -Value 0 -Force
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
-                           -Name "MaxMonitors" -Value 1 -Force
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
-                           -Name "MaxXResolution" -Value 1920 -Force
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
-                           -Name "MaxYResolution" -Value 1080 -Force
-          Restart-Service -Name TermService -Force
-          Write-Host "✅ RDP configurado"
-
-      - name: Create User
-        run: |
-          Add-Type -AssemblyName System.Security
-          $password = -join ((65..90) + (97..122) + (48..57) + (33..47) | Get-Random -Count 14 | ForEach-Object { [char]$_ })
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-          New-LocalUser -Name "Game" -Password $securePass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "Game"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Game"
-          echo "USER_PASS=Usuário: Game | Senha: $password" >> $env:GITHUB_ENV
-
-      - name: Install Tailscale
-        run: |
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $installerPath = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
-
-      - name: Connect Tailscale
-        run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gaming-pro-$env:GITHUB_RUN_ID
-          $tsIP = $null
-          $retries = 0
-          while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-              Start-Sleep -Seconds 5
-              $retries++
+        }
+        
+    - name: Keep Session Alive
+      run: |
+        Write-Host "`n=== SESSION ACTIVE ===" -ForegroundColor Green
+        Write-Host "EnigMano RDP instance is now running!" -ForegroundColor Cyan
+        Write-Host "Instance will remain active for up to 6 hours." -ForegroundColor Yellow
+        Write-Host "Do not close this window to maintain the connection." -ForegroundColor Red
+        
+        $counter = 0
+        while ($true) {
+          $counter++
+          Write-Host "Session active - Heartbeat #$counter ($(Get-Date))" -ForegroundColor Green
+          
+          try {
+            $ngrokStatus = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -TimeoutSec 5
+            if ($ngrokStatus.tunnels.Count -gt 0) {
+              Write-Host "ngrok tunnel status: ACTIVE" -ForegroundColor Green
+            } else {
+              Write-Host "ngrok tunnel status: NO TUNNELS" -ForegroundColor Yellow
+            }
+          } catch {
+            Write-Host "ngrok tunnel status: ERROR - Restarting..." -ForegroundColor Red
+            Start-Process -FilePath "C:\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
           }
-          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-
-      - name: Show Access Info
-        run: |
-          Write-Host ""
-          Write-Host "╔══════════════════════════════════════════════════════════════════════╗"
-          Write-Host "║                                                                     ║"
-          Write-Host "║            🔥 PC VIRTUAL PRO MAX - PRONTO PRA USAR                  ║"
-          Write-Host "║                                                                     ║"
-          Write-Host "╠══════════════════════════════════════════════════════════════════════╣"
-          Write-Host "║                                                                     ║"
-          Write-Host "║  🌐 Tailscale IP: $env:TAILSCALE_IP                                    ║"
-          Write-Host "║  👤 Usuário RDP: Game                                                ║"
-          Write-Host "║  🔑 Senha RDP: $(echo $env:USER_PASS)                               ║"
-          Write-Host "║                                                                     ║"
-          Write-Host "╠══════════════════════════════════════════════════════════════════════╣"
-          Write-Host "║                                                                     ║"
-          Write-Host "║  ⚡ OTIMIZAÇÕES APLICADAS:                                           ║"
-          Write-Host "║   ✅ CPU Affinity + Priority                                        ║"
-          Write-Host "║   ✅ GPU Virtual (WARP D3D11)                                       ║"
-          Write-Host "║   ✅ RAM Compression                                                ║"
-          Write-Host "║   ✅ Network Killer (latência reduzida)                             ║"
-          Write-Host "║   ✅ Game Mode + Power Plan                                         ║"
-          Write-Host "║   ✅ Windows Defender desativado                                    ║"
-          Write-Host "║   ✅ Temp Files Cleaned                                             ║"
-          Write-Host "║   ✅ Firewall DESATIVADO (RDP liberado)                             ║"
-          Write-Host "║                                                                     ║"
-          Write-Host "╠══════════════════════════════════════════════════════════════════════╣"
-          Write-Host "║                                                                     ║"
-          Write-Host "║  🖥️  PRÓXIMO PASSO:                                                  ║"
-          Write-Host "║   Conecte via RDP e instale MANUALMENTE o Sunshine ou Parsec        ║"
-          Write-Host "║   Sunshine: https://github.com/LizardByte/Sunshine                 ║"
-          Write-Host "║   Parsec:   https://parsec.app                                    ║"
-          Write-Host "║                                                                     ║"
-          Write-Host "║  🔗 Portas já liberadas: 47984-48010 (TCP/UDP)                     ║"
-          Write-Host "║                                                                     ║"
-          Write-Host "╚══════════════════════════════════════════════════════════════════════╝"
-          Write-Host ""
-
-      - name: Keep Alive
-        run: |
-          Write-Host "✅ PC Virtual PRO MAX ativo!"
-          Write-Host "⏱️  Sessão: 6 horas (limite do GitHub)"
-          Write-Host "🎮 GPU Virtual: WARP ativo"
-          Write-Host "📦 Sunshine/Parsec: instale manualmente"
-          Write-Host "🔥 Firewall: DESATIVADO"
-          Write-Host ""
-          while ($true) {
-              Write-Host "[$(Get-Date)] 🟢 Servidor ativo - RDP na porta 3389"
-              Start-Sleep -Seconds 300
-          }
+          
+          Start-Sleep -Seconds 60
+        }
