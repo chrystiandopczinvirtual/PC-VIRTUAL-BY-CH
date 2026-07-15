@@ -30,7 +30,6 @@ jobs:
         run: |
           Write-Host "=== CRIANDO GPU VIRTUAL ==="
           
-          # Ativa WARP (D3D11 via software)
           New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\Drivers" -Force -ErrorAction SilentlyContinue | Out-Null
           New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" -Force -ErrorAction SilentlyContinue | Out-Null
           
@@ -46,21 +45,26 @@ jobs:
           Write-Host "✅ GPU Virtual criada: WARP (D3D11 via software)"
 
       # =============================================
-      # 3. RAM COMPRESSION + PAGEFILE
+      # 3. RAM COMPRESSION + PAGEFILE (CORRIGIDO)
       # =============================================
       - name: 🧠 RAM Compression + Pagefile
         run: |
           Write-Host "=== OTIMIZANDO MEMÓRIA ==="
+          
+          # Ativa compactação de memória
           Enable-MMAgent -MemoryCompression
-          $pageFile = Get-WmiObject -Class Win32_PageFileSetting
-          $pageFile.InitialSize = 16384
-          $pageFile.MaximumSize = 16384
-          $pageFile.Put()
+          
+          # Configura Pagefile via wmic (mais confiável)
+          wmic pagefileset create name="C:\\pagefile.sys" 2>$null
+          wmic pagefileset where name="C:\\pagefile.sys" set InitialSize=16384,MaximumSize=16384
+          
+          # Aumenta cache de sistema
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
                            -Name "LargeSystemCache" -Value 1 -Force
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
                            -Name "DisablePagingExecutive" -Value 1 -Force
-          Write-Host "✅ RAM otimizada"
+          
+          Write-Host "✅ RAM otimizada: compactação ativa, pagefile 16GB fixo"
 
       # =============================================
       # 4. NETWORK KILLER
@@ -203,7 +207,7 @@ jobs:
           Write-Host "✅ Sunshine instalado!"
 
       # =============================================
-      # 13. INSTALA APPS (SEM WINGET)
+      # 13. INSTALA APPS
       # =============================================
       - name: Install Apps
         run: |
