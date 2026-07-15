@@ -1,4 +1,4 @@
-name: EnigMano Instance Deployment
+name: EnigMano RDP with Tailscale
 
 on:
   workflow_dispatch:
@@ -45,16 +45,23 @@ jobs:
         Write-Host "Username: runneradmin" -ForegroundColor Yellow
         Write-Host "Password: P@ssw0rd!" -ForegroundColor Yellow
         
-    - name: Download and Setup ngrok
+    - name: Install Tailscale
       run: |
-        Write-Host "Downloading ngrok..." -ForegroundColor Green
-        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-        Expand-Archive ngrok.zip -DestinationPath C:\ngrok
+        Write-Host "Installing Tailscale..." -ForegroundColor Green
+        winget install Tailscale.Tailscale --silent
+        Start-Sleep -Seconds 10
         
-    - name: Configure ngrok
+    - name: Start Tailscale
       run: |
-        Write-Host "Configuring ngrok..." -ForegroundColor Green
-        C:\ngrok\ngrok.exe config add-authtoken ${{ secrets.NGROK_SHAHZAIB }}
+        Write-Host "Starting Tailscale..." -ForegroundColor Green
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
+        Start-Sleep -Seconds 15
+        
+    - name: Get Tailscale IP
+      run: |
+        $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+        Write-Host "Tailscale IP: $tsIP" -ForegroundColor Green
+        echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
         
     - name: Install Essential Software
       run: |
@@ -67,45 +74,22 @@ jobs:
         choco install notepadplusplus -y
         Write-Host "Software installation completed!" -ForegroundColor Green
         
-    - name: Start ngrok Tunnel
+    - name: Connection Details
       run: |
-        Write-Host "Starting ngrok tunnel..." -ForegroundColor Green
-        Start-Process -FilePath "C:\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
-        Start-Sleep -Seconds 10
+        Write-Host "`n=== CONNECTION DETAILS (TAILSCALE) ===" -ForegroundColor Green
+        Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Cyan
+        Write-Host "║         ENIGMANO RDP ACCESS          ║" -ForegroundColor Cyan  
+        Write-Host "╠══════════════════════════════════════╣" -ForegroundColor Cyan
+        Write-Host "║ Host: $env:TAILSCALE_IP              ║" -ForegroundColor White
+        Write-Host "║ Username: runneradmin                ║" -ForegroundColor White
+        Write-Host "║ Password: P@ssw0rd!                  ║" -ForegroundColor White
+        Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Cyan
         
-    - name: Get Connection Details
-      run: |
-        Write-Host "`n=== CONNECTION DETAILS ===" -ForegroundColor Green
-        try {
-          $ngrokApi = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
-          $publicUrl = $ngrokApi.tunnels[0].public_url
-          $host = $publicUrl -replace "tcp://", ""
-          
-          Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║         ENIGMANO RDP ACCESS          ║" -ForegroundColor Cyan  
-          Write-Host "╠══════════════════════════════════════╣" -ForegroundColor Cyan
-          Write-Host "║ Host: $host" -ForegroundColor White
-          Write-Host "║ Username: runneradmin                ║" -ForegroundColor White
-          Write-Host "║ Password: P@ssw0rd!                  ║" -ForegroundColor White
-          Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Cyan
-          
-          Write-Host "`nConnection Instructions:" -ForegroundColor Yellow
-          Write-Host "1. Open Remote Desktop Connection" -ForegroundColor White
-          Write-Host "2. Enter the host address above" -ForegroundColor White
-          Write-Host "3. Use the provided credentials" -ForegroundColor White
-          Write-Host "4. IMPORTANT: Minimize (don't close) this window to keep connection alive!" -ForegroundColor Red
-          
-        } catch {
-          Write-Host "Error getting ngrok details. Checking manually..." -ForegroundColor Red
-          Start-Sleep -Seconds 5
-          try {
-            $ngrokApi = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
-            $publicUrl = $ngrokApi.tunnels[0].public_url
-            Write-Host "Manual check - ngrok URL: $publicUrl" -ForegroundColor Green
-          } catch {
-            Write-Host "ngrok API not accessible. Please check ngrok status manually." -ForegroundColor Red
-          }
-        }
+        Write-Host "`nConnection Instructions:" -ForegroundColor Yellow
+        Write-Host "1. Install Tailscale on your device (phone, tablet, Mac, Linux)" -ForegroundColor White
+        Write-Host "2. Log in with the same Tailscale account" -ForegroundColor White
+        Write-Host "3. Open Remote Desktop app and enter the IP above" -ForegroundColor White
+        Write-Host "4. Use the provided credentials" -ForegroundColor White
         
     - name: Keep Session Alive
       run: |
@@ -119,16 +103,13 @@ jobs:
           $counter++
           Write-Host "Session active - Heartbeat #$counter ($(Get-Date))" -ForegroundColor Green
           
-          try {
-            $ngrokStatus = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -TimeoutSec 5
-            if ($ngrokStatus.tunnels.Count -gt 0) {
-              Write-Host "ngrok tunnel status: ACTIVE" -ForegroundColor Green
-            } else {
-              Write-Host "ngrok tunnel status: NO TUNNELS" -ForegroundColor Yellow
-            }
-          } catch {
-            Write-Host "ngrok tunnel status: ERROR - Restarting..." -ForegroundColor Red
-            Start-Process -FilePath "C:\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+          # Check if Tailscale is still connected
+          $tsStatus = & "C:\Program Files\Tailscale\tailscale.exe" status
+          if ($tsStatus -match "active") {
+            Write-Host "Tailscale status: ACTIVE" -ForegroundColor Green
+          } else {
+            Write-Host "Tailscale status: ERROR - Restarting..." -ForegroundColor Red
+            & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
           }
           
           Start-Sleep -Seconds 60
