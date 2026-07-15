@@ -45,11 +45,16 @@ jobs:
         Write-Host "Username: runneradmin" -ForegroundColor Yellow
         Write-Host "Password: P@ssw0rd!" -ForegroundColor Yellow
         
-    - name: Install Tailscale
+    - name: Install Tailscale (Silent)
       run: |
-        Write-Host "Installing Tailscale..." -ForegroundColor Green
-        winget install Tailscale.Tailscale --silent
-        Start-Sleep -Seconds 10
+        Write-Host "Downloading Tailscale..." -ForegroundColor Green
+        $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+        $installerPath = "$env:TEMP\tailscale.msi"
+        Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
+        Write-Host "Installing Tailscale silently..." -ForegroundColor Green
+        Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart" -Wait
+        Remove-Item $installerPath -Force
+        Write-Host "Tailscale installed successfully!" -ForegroundColor Green
         
     - name: Start Tailscale
       run: |
@@ -103,7 +108,6 @@ jobs:
           $counter++
           Write-Host "Session active - Heartbeat #$counter ($(Get-Date))" -ForegroundColor Green
           
-          # Check if Tailscale is still connected
           $tsStatus = & "C:\Program Files\Tailscale\tailscale.exe" status
           if ($tsStatus -match "active") {
             Write-Host "Tailscale status: ACTIVE" -ForegroundColor Green
