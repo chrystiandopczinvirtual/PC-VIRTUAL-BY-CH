@@ -1,10 +1,10 @@
-name: Cloud-Gaming-VPS-PRO-MAX
+name: RDP-Otimizado
 
 on:
   workflow_dispatch:
 
 jobs:
-  cloud-gaming-pro-max:
+  rdp:
     runs-on: windows-2022
     timeout-minutes: 3600
 
@@ -150,10 +150,6 @@ jobs:
           }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
 
-
-      # =============================================
-      # SHOW ACCESS INFO (CORRIGIDO - SEM CLEAR-HOST)
-      # =============================================
       - name: Show Access Info
         run: |
           Write-Host ""
