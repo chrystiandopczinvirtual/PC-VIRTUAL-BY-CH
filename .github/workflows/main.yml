@@ -9,9 +9,6 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      # =============================================
-      # 1. OTIMIZAÇÃO DE CPU
-      # =============================================
       - name: ⚡ CPU Affinity & Priority
         run: |
           Write-Host "=== OTIMIZANDO CPU ==="
@@ -23,16 +20,11 @@ jobs:
           powercfg -setactive scheme_current
           Write-Host "✅ CPU otimizada"
 
-      # =============================================
-      # 2. GPU VIRTUAL (WARP + D3D11)
-      # =============================================
       - name: 🎮 GPU Virtual (WARP + D3D11)
         run: |
           Write-Host "=== CRIANDO GPU VIRTUAL ==="
-          
           New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\Drivers" -Force -ErrorAction SilentlyContinue | Out-Null
           New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" -Force -ErrorAction SilentlyContinue | Out-Null
-          
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\Drivers" `
                            -Name "SoftwareOnly" -Value 1 -Force -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D" `
@@ -41,12 +33,8 @@ jobs:
                            -Name "MaxThreads" -Value 0 -Force -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" `
                            -Name "MemoryLimit" -Value 2048 -Force -ErrorAction SilentlyContinue
-          
           Write-Host "✅ GPU Virtual criada: WARP (D3D11 via software)"
 
-      # =============================================
-      # 3. RAM COMPRESSION
-      # =============================================
       - name: 🧠 RAM Compression
         run: |
           Write-Host "=== OTIMIZANDO MEMÓRIA ==="
@@ -57,9 +45,6 @@ jobs:
                            -Name "DisablePagingExecutive" -Value 1 -Force
           Write-Host "✅ RAM otimizada: compactação ativa"
 
-      # =============================================
-      # 4. NETWORK KILLER
-      # =============================================
       - name: 🌐 Network Killer (Low Latency)
         run: |
           Write-Host "=== OTIMIZANDO REDE ==="
@@ -74,9 +59,6 @@ jobs:
           netsh int tcp set global initialRto=2000
           Write-Host "✅ Rede otimizada"
 
-      # =============================================
-      # 5. GAME MODE + POWER PLAN (CORRIGIDO)
-      # =============================================
       - name: 🎯 Game Mode + Power Plan
         run: |
           Write-Host "=== ATIVANDO GAME MODE ==="
@@ -87,9 +69,6 @@ jobs:
           powercfg -setactive scheme_current
           Write-Host "✅ Game Mode ativado"
 
-      # =============================================
-      # 6. WINDOWS DEFENDER KILLER
-      # =============================================
       - name: 🔥 Windows Defender Killer
         run: |
           Write-Host "=== DESATIVANDO WINDOWS DEFENDER ==="
@@ -101,9 +80,6 @@ jobs:
           Set-Service -Name WinDefend -StartupType Disabled -ErrorAction SilentlyContinue
           Write-Host "✅ Windows Defender desativado"
 
-      # =============================================
-      # 7. TEMP FILES CLEANER
-      # =============================================
       - name: 🧹 Temp Files Cleaner
         run: |
           Write-Host "=== LIMPANDO ARQUIVOS TEMPORÁRIOS ==="
@@ -112,9 +88,6 @@ jobs:
           Clear-RecycleBin -Force -ErrorAction SilentlyContinue
           Write-Host "✅ Limpeza concluída"
 
-      # =============================================
-      # 8. REMOVE TEST MODE
-      # =============================================
       - name: Remove Test Mode
         run: |
           bcdedit /set testsigning off 2>$null
@@ -127,9 +100,6 @@ jobs:
           Start-Sleep -Seconds 2
           Start-Process explorer -ErrorAction SilentlyContinue
 
-      # =============================================
-      # 9. CONFIGURA RDP + FIREWALL
-      # =============================================
       - name: Configure RDP & Firewall
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
@@ -150,9 +120,6 @@ jobs:
           netsh advfirewall firewall add rule name="Sunshine-UDP" dir=in action=allow protocol=UDP localport=47998-48010
           Restart-Service -Name TermService -Force
 
-      # =============================================
-      # 10. CRIA USUÁRIO
-      # =============================================
       - name: Create User
         run: |
           Add-Type -AssemblyName System.Security
@@ -163,9 +130,6 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Game"
           echo "USER_PASS=Usuário: Game | Senha: $password" >> $env:GITHUB_ENV
 
-      # =============================================
-      # 11. INSTALA TAILSCALE
-      # =============================================
       - name: Install Tailscale
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
@@ -187,20 +151,26 @@ jobs:
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
 
       # =============================================
-      # 12. INSTALA SUNSHINE
+      # INSTALA SUNSHINE (CORRIGIDO)
       # =============================================
       - name: Install Sunshine
         run: |
           Write-Host "📦 Instalando Sunshine..."
-          $sunshineUrl = "https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe"
-          Invoke-WebRequest -Uri $sunshineUrl -OutFile "$env:TEMP\sunshine.exe"
-          Start-Process -FilePath "$env:TEMP\sunshine.exe" -ArgumentList "/S" -Wait
+          $url = "https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe"
+          $out = "$env:TEMP\sunshine.exe"
+          
+          # Usa curl.exe (mais confiável)
+          curl.exe -L -o $out $url
+          
+          if (-not (Test-Path $out)) {
+              Write-Error "Falha no download do Sunshine"
+              exit 1
+          }
+          
+          Start-Process -FilePath $out -ArgumentList "/S" -Wait
           Start-Process "C:\Program Files\Sunshine\sunshine.exe"
           Write-Host "✅ Sunshine instalado!"
 
-      # =============================================
-      # 13. INSTALA APPS
-      # =============================================
       - name: Install Apps
         run: |
           Write-Host "📦 Instalando Chrome..."
@@ -217,35 +187,24 @@ jobs:
           
           Write-Host "✅ Apps instalados!"
 
-      # =============================================
-      # 14. CRIA ATALHOS
-      # =============================================
       - name: Create Shortcuts
         run: |
           $shell = New-Object -ComObject WScript.Shell
-          
           $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Chrome.lnk")
           $s.TargetPath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
           $s.Save()
-          
           $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Sunshine-UI.lnk")
           $s.TargetPath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
           $s.Arguments = "http://localhost:47990"
           $s.Save()
-          
           $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Steam.lnk")
           $s.TargetPath = "C:\Program Files (x86)\Steam\steam.exe"
           $s.Save()
-          
           $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Roblox.lnk")
           $s.TargetPath = "C:\Program Files (x86)\Roblox\Versions\RobloxPlayerBeta.exe"
           $s.Save()
-          
           Write-Host "✅ Atalhos criados!"
 
-      # =============================================
-      # 15. MOSTRA ACESSO
-      # =============================================
       - name: Show Access Info
         run: |
           Clear-Host
@@ -274,9 +233,6 @@ jobs:
           Write-Host "╚══════════════════════════════════════════════════════════════════════╝"
           Write-Host ""
 
-      # =============================================
-      # 16. KEEP ALIVE
-      # =============================================
       - name: Keep Alive
         run: |
           Write-Host "✅ PC Virtual PRO MAX ativo!"
