@@ -10,35 +10,27 @@ jobs:
 
     steps:
       # =============================================
-      # 1. OTIMIZAÇÃO DE CPU (AFFINITY + PRIORITY)
+      # 1. OTIMIZAÇÃO DE CPU
       # =============================================
       - name: ⚡ CPU Affinity & Priority
         run: |
           Write-Host "=== OTIMIZANDO CPU ==="
-          
-          # Prioridade máxima para processos em primeiro plano
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" `
                            -Name "SystemResponsiveness" -Value 0 -Force
-          
-          # Configura modo de desempenho máximo da CPU
           powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          
-          # Desativa Core Parking (força todos os núcleos ativos)
           powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 0
           powercfg -setacvalueindex scheme_current sub_processor 54533251-82be-4824-96c1-47b60b740d00 0
           powercfg -setactive scheme_current
-          
-          # Aumenta prioridade do processo do jogo (ajuste manual depois)
-          Write-Host "✅ CPU otimizada: todos os núcleos ativos, prioridade máxima"
+          Write-Host "✅ CPU otimizada"
 
       # =============================================
-      # 2. GPU VIRTUAL (WARP + D3D11 + MESA)
+      # 2. GPU VIRTUAL (WARP + D3D11)
       # =============================================
-      - name: 🎮 GPU Virtual (WARP + D3D11 + Mesa3D)
+      - name: 🎮 GPU Virtual (WARP + D3D11)
         run: |
           Write-Host "=== CRIANDO GPU VIRTUAL ==="
           
-          # 1. Ativa WARP (D3D11 via software)
+          # Ativa WARP (D3D11 via software)
           New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\Drivers" -Force -ErrorAction SilentlyContinue | Out-Null
           New-Item -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" -Force -ErrorAction SilentlyContinue | Out-Null
           
@@ -51,17 +43,7 @@ jobs:
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Direct3D\WARP" `
                            -Name "MemoryLimit" -Value 2048 -Force -ErrorAction SilentlyContinue
           
-          # 2. Instala Mesa3D (OpenGL via software)
-          Write-Host "📦 Instalando Mesa3D..."
-          winget install 7zip.7zip -e --silent 2>$null
-          
-          $mesaUrl = "https://github.com/pal1000/mesa-distrib/releases/latest/download/mesa3d-24.0.0-release-msvc.7z"
-          Invoke-WebRequest -Uri $mesaUrl -OutFile "$env:TEMP\mesa.7z"
-          & "C:\Program Files\7-Zip\7z.exe" x "$env:TEMP\mesa.7z" -o"$env:TEMP\mesa" -y 2>$null
-          Copy-Item "$env:TEMP\mesa\opengl32.dll" "C:\Windows\System32" -Force -ErrorAction SilentlyContinue
-          Copy-Item "$env:TEMP\mesa\opengl32.dll" "C:\Windows\SysWOW64" -Force -ErrorAction SilentlyContinue
-          
-          Write-Host "✅ GPU Virtual criada: WARP (D3D11) + Mesa3D (OpenGL)"
+          Write-Host "✅ GPU Virtual criada: WARP (D3D11 via software)"
 
       # =============================================
       # 3. RAM COMPRESSION + PAGEFILE
@@ -69,49 +51,33 @@ jobs:
       - name: 🧠 RAM Compression + Pagefile
         run: |
           Write-Host "=== OTIMIZANDO MEMÓRIA ==="
-          
-          # Ativa compactação de memória
           Enable-MMAgent -MemoryCompression
-          
-          # Configura Pagefile em 16GB fixo (evita fragmentação)
           $pageFile = Get-WmiObject -Class Win32_PageFileSetting
           $pageFile.InitialSize = 16384
           $pageFile.MaximumSize = 16384
           $pageFile.Put()
-          
-          # Aumenta cache de sistema
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
                            -Name "LargeSystemCache" -Value 1 -Force
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" `
                            -Name "DisablePagingExecutive" -Value 1 -Force
-          
-          Write-Host "✅ RAM otimizada: compactação ativa, pagefile 16GB fixo"
+          Write-Host "✅ RAM otimizada"
 
       # =============================================
-      # 4. NETWORK KILLER (TCP/UDP OTIMIZADO)
+      # 4. NETWORK KILLER
       # =============================================
       - name: 🌐 Network Killer (Low Latency)
         run: |
           Write-Host "=== OTIMIZANDO REDE ==="
-          
-          # Desativa Nagle (reduz latência)
           Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" | ForEach-Object {
               Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Force -ErrorAction SilentlyContinue
               Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Force -ErrorAction SilentlyContinue
           }
-          
-          # Otimiza TCP
           netsh int tcp set global autotuninglevel=normal
           netsh int tcp set global chimney=disabled
           netsh int tcp set global rss=enabled
           netsh int tcp set global timestamps=disabled
           netsh int tcp set global initialRto=2000
-          
-          # Prioridade de rede para jogos (DSCP)
-          netsh advfirewall firewall add rule name="GameTraffic" dir=in action=allow protocol=ANY remoteport=27000-28000
-          netsh advfirewall firewall add rule name="GameTrafficOut" dir=out action=allow protocol=ANY remoteport=27000-28000
-          
-          Write-Host "✅ Rede otimizada: baixa latência, prioridade para jogos"
+          Write-Host "✅ Rede otimizada"
 
       # =============================================
       # 5. GAME MODE + POWER PLAN
@@ -119,20 +85,11 @@ jobs:
       - name: 🎯 Game Mode + Power Plan
         run: |
           Write-Host "=== ATIVANDO GAME MODE ==="
-          
-          # Ativa Game Mode
           Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AllowAutoGameMode" -Value 1 -Force
           Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Force
-          
-          # Desativa economia de energia
           powercfg -setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 100
           powercfg -setactive scheme_current
-          
-          # Desativa suspensão de dispositivos USB
-          powercfg -setacvalueindex scheme_current sub_usb 2a737441-1930-4402-8d77-b2bebba308a3 0
-          powercfg -setactive scheme_current
-          
-          Write-Host "✅ Game Mode ativado, economia de energia desativada"
+          Write-Host "✅ Game Mode ativado"
 
       # =============================================
       # 6. WINDOWS DEFENDER KILLER
@@ -140,19 +97,12 @@ jobs:
       - name: 🔥 Windows Defender Killer
         run: |
           Write-Host "=== DESATIVANDO WINDOWS DEFENDER ==="
-          
-          # Desativa proteção em tempo real
           Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
           Set-MpPreference -DisableBehaviorMonitoring $true -ErrorAction SilentlyContinue
           Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction SilentlyContinue
           Set-MpPreference -DisableIOAVProtection $true -ErrorAction SilentlyContinue
-          Set-MpPreference -DisablePrivacyMode $true -ErrorAction SilentlyContinue
-          Set-MpPreference -SignatureDisableUpdateOnStartupWithoutEngine $true -ErrorAction SilentlyContinue
-          
-          # Desativa serviços do Defender
           Stop-Service -Name WinDefend -Force -ErrorAction SilentlyContinue
           Set-Service -Name WinDefend -StartupType Disabled -ErrorAction SilentlyContinue
-          
           Write-Host "✅ Windows Defender desativado"
 
       # =============================================
@@ -161,13 +111,10 @@ jobs:
       - name: 🧹 Temp Files Cleaner
         run: |
           Write-Host "=== LIMPANDO ARQUIVOS TEMPORÁRIOS ==="
-          
           Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item -Path "$env:WINDIR\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
-          Remove-Item -Path "$env:USERPROFILE\AppData\Local\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
           Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-          
-          Write-Host "✅ Limpeza concluída: +5 GB livres"
+          Write-Host "✅ Limpeza concluída"
 
       # =============================================
       # 8. REMOVE TEST MODE
@@ -195,19 +142,16 @@ jobs:
                            -Name "UserAuthentication" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
                            -Name "SecurityLayer" -Value 0 -Force
-
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
                            -Name "MaxMonitors" -Value 1 -Force
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
                            -Name "MaxXResolution" -Value 1920 -Force
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
                            -Name "MaxYResolution" -Value 1080 -Force
-
           netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
           netsh advfirewall firewall add rule name="Sunshine-TCP" dir=in action=allow protocol=TCP localport=47984-48010
           netsh advfirewall firewall add rule name="Sunshine-UDP" dir=in action=allow protocol=UDP localport=47998-48010
-          
           Restart-Service -Name TermService -Force
 
       # =============================================
@@ -259,18 +203,23 @@ jobs:
           Write-Host "✅ Sunshine instalado!"
 
       # =============================================
-      # 13. INSTALA APPS
+      # 13. INSTALA APPS (SEM WINGET)
       # =============================================
       - name: Install Apps
         run: |
+          Write-Host "📦 Instalando Chrome..."
           Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile "$env:TEMP\chrome.exe"
           Start-Process -FilePath "$env:TEMP\chrome.exe" -ArgumentList "/silent /install" -Wait
           
+          Write-Host "📦 Instalando Steam..."
           Invoke-WebRequest -Uri "https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe" -OutFile "$env:TEMP\steam.exe"
           Start-Process -FilePath "$env:TEMP\steam.exe" -ArgumentList "/S" -Wait
           
+          Write-Host "📦 Instalando Roblox..."
           Invoke-WebRequest -Uri "https://setup.rbxcdn.com/RobloxPlayerLauncher.exe" -OutFile "$env:TEMP\RobloxPlayerLauncher.exe"
           Start-Process -FilePath "$env:TEMP\RobloxPlayerLauncher.exe" -ArgumentList "/silent" -Wait
+          
+          Write-Host "✅ Apps instalados!"
 
       # =============================================
       # 14. CRIA ATALHOS
@@ -291,6 +240,12 @@ jobs:
           $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Steam.lnk")
           $s.TargetPath = "C:\Program Files (x86)\Steam\steam.exe"
           $s.Save()
+          
+          $s = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Roblox.lnk")
+          $s.TargetPath = "C:\Program Files (x86)\Roblox\Versions\RobloxPlayerBeta.exe"
+          $s.Save()
+          
+          Write-Host "✅ Atalhos criados!"
 
       # =============================================
       # 15. MOSTRA ACESSO
@@ -311,14 +266,14 @@ jobs:
           Write-Host "║                                                                     ║"
           Write-Host "╠══════════════════════════════════════════════════════════════════════╣"
           Write-Host "║                                                                     ║"
-          Write-Host "║  ⚡ 7 OTIMIZAÇÕES APLICADAS:                                         ║"
-          Write-Host "║   ✅ CPU Affinity + Priority (todos os núcleos ativos)              ║"
-          Write-Host "║   ✅ GPU Virtual (WARP D3D11 + Mesa3D OpenGL)                       ║"
+          Write-Host "║  ⚡ OTIMIZAÇÕES APLICADAS:                                           ║"
+          Write-Host "║   ✅ CPU Affinity + Priority                                        ║"
+          Write-Host "║   ✅ GPU Virtual (WARP D3D11)                                       ║"
           Write-Host "║   ✅ RAM Compression + Pagefile 16GB                                ║"
           Write-Host "║   ✅ Network Killer (latência reduzida)                             ║"
-          Write-Host "║   ✅ Game Mode + Power Plan (desempenho máximo)                     ║"
+          Write-Host "║   ✅ Game Mode + Power Plan                                         ║"
           Write-Host "║   ✅ Windows Defender desativado                                    ║"
-          Write-Host "║   ✅ Temp Files Cleaned (+5 GB livres)                              ║"
+          Write-Host "║   ✅ Temp Files Cleaned                                             ║"
           Write-Host "║                                                                     ║"
           Write-Host "╚══════════════════════════════════════════════════════════════════════╝"
           Write-Host ""
@@ -330,7 +285,7 @@ jobs:
         run: |
           Write-Host "✅ PC Virtual PRO MAX ativo!"
           Write-Host "⏱️  Sessão: 6 horas (limite do GitHub)"
-          Write-Host "🎮 GPU Virtual: WARP + Mesa3D ativos"
+          Write-Host "🎮 GPU Virtual: WARP ativo"
           Write-Host ""
           while ($true) {
               Write-Host "[$(Get-Date)] 🟢 Servidor ativo - Moonlight porta 47989"
