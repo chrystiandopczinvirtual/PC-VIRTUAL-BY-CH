@@ -100,7 +100,16 @@ jobs:
           Start-Sleep -Seconds 2
           Start-Process explorer -ErrorAction SilentlyContinue
 
-      - name: Configure RDP & Firewall
+      # =============================================
+      # 🔥 DESATIVA O FIREWALL (GARANTE RDP)
+      # =============================================
+      - name: 🔥 Desativar Firewall (RDP liberado)
+        run: |
+          Write-Host "=== DESATIVANDO FIREWALL ==="
+          netsh advfirewall set allprofiles state off
+          Write-Host "✅ Firewall desativado (todas as portas liberadas)"
+
+      - name: Configure RDP
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
                            -Name "fDenyTSConnections" -Value 0 -Force
@@ -114,11 +123,8 @@ jobs:
                            -Name "MaxXResolution" -Value 1920 -Force
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
                            -Name "MaxYResolution" -Value 1080 -Force
-          netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
-          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
-          netsh advfirewall firewall add rule name="Sunshine-TCP" dir=in action=allow protocol=TCP localport=47984-48010
-          netsh advfirewall firewall add rule name="Sunshine-UDP" dir=in action=allow protocol=UDP localport=47998-48010
           Restart-Service -Name TermService -Force
+          Write-Host "✅ RDP configurado"
 
       - name: Create User
         run: |
@@ -173,6 +179,7 @@ jobs:
           Write-Host "║   ✅ Game Mode + Power Plan                                         ║"
           Write-Host "║   ✅ Windows Defender desativado                                    ║"
           Write-Host "║   ✅ Temp Files Cleaned                                             ║"
+          Write-Host "║   ✅ Firewall DESATIVADO (RDP liberado)                             ║"
           Write-Host "║                                                                     ║"
           Write-Host "╠══════════════════════════════════════════════════════════════════════╣"
           Write-Host "║                                                                     ║"
@@ -192,6 +199,7 @@ jobs:
           Write-Host "⏱️  Sessão: 6 horas (limite do GitHub)"
           Write-Host "🎮 GPU Virtual: WARP ativo"
           Write-Host "📦 Sunshine/Parsec: instale manualmente"
+          Write-Host "🔥 Firewall: DESATIVADO"
           Write-Host ""
           while ($true) {
               Write-Host "[$(Get-Date)] 🟢 Servidor ativo - RDP na porta 3389"
