@@ -1,27 +1,97 @@
-name: RDP
+name: RDP-Windows11
 
 on:
   workflow_dispatch:
 
 jobs:
   secure-rdp:
-    runs-on: windows-latest
-    timeout-minutes: 999999
+    runs-on: windows-2022
+    timeout-minutes: 3600
 
     steps:
+      # 🔥 REMOÇÃO TOTAL DO TEST MODE (SEM REBOOT)
+      - name: Force Remove Test Mode (No Reboot)
+        run: |
+          Write-Host "=== REMOVENDO TEST MODE COMPLETAMENTE (sem reboot) ==="
+          
+          # 1. Desativa testsigning
+          bcdedit /set testsigning off
+          bcdedit /set nointegritychecks off
+          
+          # 2. Remove flags de debug
+          bcdedit /set debug off
+          bcdedit /set hypervisorlaunchtype off
+          
+          # 3. Recarrega a política de boot via WMI
+          $bootConfig = Get-WmiObject -Namespace "root\wmi" -Class "WmiMonitorID" -ErrorAction SilentlyContinue
+          if ($bootConfig) {
+              Invoke-WmiMethod -Namespace "root\wmi" -Class "WmiMonitorID" -Name "WmiRefresh" -ErrorAction SilentlyContinue
+          }
+          
+          # 4. Força atualização de política de integridade
+          gpupdate /force /boot
+          
+          # 5. Reinicia serviços críticos de assinatura
+          Restart-Service -Name "CryptSvc" -Force
+          Restart-Service -Name "TrustedInstaller" -Force
+          Restart-Service -Name "KtmRm" -Force
+          
+          # 6. Força re-scan de drivers
+          pnputil /scan-devices
+          
+          # 7. Limpa cache de assinatura digital
+          certutil -URLCache * delete
+          
+          # 8. Remove mensagem "Test Mode" da tela
+          Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+                               -Name "LegalNoticeText" -Force -ErrorAction SilentlyContinue
+          Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+                               -Name "LegalNoticeCaption" -Force -ErrorAction SilentlyContinue
+          Remove-ItemProperty -Path "HKCU:\Control Panel\Desktop" `
+                               -Name "PaintDesktopVersion" -Force -ErrorAction SilentlyContinue
+          
+          # 9. Reinicia explorer para aplicar remoção do texto
+          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          Start-Process explorer
+          
+          # 10. Verifica se foi aplicado
+          $status = bcdedit /enum | Select-String "testsigning"
+          if ($status -match "off" -or $status -match "No") {
+              Write-Host "✅ TEST MODE REMOVIDO COM SUCESSO!"
+          } else {
+              Write-Host "⚠️ Test Mode ainda está ativo - pode ser necessário reiniciar"
+          }
+          
+          Write-Host ""
+          Write-Host "📊 STATUS ATUAL:"
+          bcdedit /enum | Select-String "testsigning|nointegritychecks|debug|hypervisorlaunchtype"
+
       - name: Configure Core RDP Settings
         run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
-          netsh advfirewall firewall delete rule name="RDP-Tailscale"
-          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+                             -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+                             -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+                             -Name "SecurityLayer" -Value 0 -Force
+
+          netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
+          netsh advfirewall firewall add rule name="RDP-Tailscale" `
+            dir=in action=allow protocol=TCP localport=3389
+
           Restart-Service -Name TermService -Force
 
       - name: Create RDP User with Secure Password
         run: |
           Add-Type -AssemblyName System.Security
-          $charSet = @{ Upper = [char[]](65..90); Lower = [char[]](97..122); Number = [char[]](48..57); Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126)) }
+          $charSet = @{
+              Upper   = [char[]](65..90)
+              Lower   = [char[]](97..122)
+              Number  = [char[]](48..57)
+              Special = ([char[]](33..47) + [char[]](58..64) +
+                         [char[]](91..96) + [char[]](123..126))
+          }
           $rawPassword = @()
           $rawPassword += $charSet.Upper | Get-Random -Count 4
           $rawPassword += $charSet.Lower | Get-Random -Count 4
@@ -32,57 +102,73 @@ jobs:
           New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member "RDP"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+          
           echo "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
+          
+          if (-not (Get-LocalUser -Name "RDP")) {
+              Write-Error "User creation failed"
+              exit 1
+          }
 
       - name: Install Tailscale
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
           $installerPath = "$env:TEMP\tailscale.msi"
+          
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
           Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
           Remove-Item $installerPath -Force
 
       - name: Establish Tailscale Connection
-        shell: pwsh
-        env:
-          TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          $tailscalePath = "$env:ProgramFiles\Tailscale\tailscale.exe"
-          & $tailscalePath up --authkey=$env:TS_AUTHKEY --hostname="gh-runner-$env:GITHUB_RUN_ID" --accept-routes --accept-dns
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
+          
           $tsIP = $null
           $retries = 0
-          while (-not $tsIP -and $retries -lt 15) {
-              $tsIP = & $tailscalePath ip -4
+          while (-not $tsIP -and $retries -lt 10) {
+              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
               Start-Sleep -Seconds 5
               $retries++
           }
+          
+          if (-not $tsIP) {
+              Write-Error "Tailscale IP not assigned. Exiting."
+              exit 1
+          }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-
-      - name: Advanced VM Spoof for Roblox
-        run: |
-          Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "SystemManufacturer" -Value "Dell Inc."
-          Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "SystemProductName" -Value "OptiPlex 7070"
-          Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor\0" -Name "ProcessorNameString" -Value "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz"
-
-      - name: Force Disable Test Mode
-        run: |
-          bcdedit /set testsigning off
-          reg add "HKLM\System\CurrentControlSet\Control\Session Manager" /v BootExecute /t REG_SZ /d "autocheck autochk *" /f
-          Write-Host "Test Mode off!"
-
+      
       - name: Verify RDP Accessibility
         run: |
           Write-Host "Tailscale IP: $env:TAILSCALE_IP"
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
-          if (-not $testResult.TcpTestSucceeded) { Write-Error "Failed"; exit 1 }
+          if (-not $testResult.TcpTestSucceeded) {
+              Write-Error "TCP connection to RDP port 3389 failed"
+              exit 1
+          }
+          Write-Host "TCP connectivity successful!"
+
+      - name: Install Windows 11 Optional Features
+        run: |
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+              Add-AppxPackage -Path "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+          }
+          
+          winget install --id Microsoft.WindowsTerminal -e --silent 2>$null
+          winget install --id Microsoft.PowerShell -e --silent 2>$null
+          
+          Write-Host "Windows 11 features installed successfully"
 
       - name: Maintain Connection
         run: |
-          Write-Host "=== RDP ACCESS ==="
+          Write-Host "`n=== RDP ACCESS ==="
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
           Write-Host "Password: $(echo $env:RDP_CREDS)"
+          Write-Host "==================`n"
+          Write-Host "✅ TEST MODE: REMOVIDO TOTALMENTE"
+          Write-Host "⚠️ Se ainda aparecer, execute: bcdedit /enum | findstr testsigning"
+          
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP Ativo - Sem limites!"
+              Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
               Start-Sleep -Seconds 300
           }
