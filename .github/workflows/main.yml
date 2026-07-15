@@ -9,9 +9,6 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      # =============================================
-      # 1. OTIMIZAÇÃO DE CPU
-      # =============================================
       - name: ⚡ CPU Affinity & Priority
         run: |
           Write-Host "=== OTIMIZANDO CPU ==="
@@ -23,9 +20,6 @@ jobs:
           powercfg -setactive scheme_current
           Write-Host "✅ CPU otimizada"
 
-      # =============================================
-      # 2. GPU VIRTUAL (WARP + D3D11)
-      # =============================================
       - name: 🎮 GPU Virtual (WARP + D3D11)
         run: |
           Write-Host "=== CRIANDO GPU VIRTUAL ==="
@@ -41,9 +35,6 @@ jobs:
                            -Name "MemoryLimit" -Value 2048 -Force -ErrorAction SilentlyContinue
           Write-Host "✅ GPU Virtual criada: WARP (D3D11 via software)"
 
-      # =============================================
-      # 3. RAM COMPRESSION
-      # =============================================
       - name: 🧠 RAM Compression
         run: |
           Write-Host "=== OTIMIZANDO MEMÓRIA ==="
@@ -54,9 +45,6 @@ jobs:
                            -Name "DisablePagingExecutive" -Value 1 -Force
           Write-Host "✅ RAM otimizada: compactação ativa"
 
-      # =============================================
-      # 4. NETWORK KILLER (BAIXA LATÊNCIA)
-      # =============================================
       - name: 🌐 Network Killer (Low Latency)
         run: |
           Write-Host "=== OTIMIZANDO REDE ==="
@@ -71,9 +59,6 @@ jobs:
           netsh int tcp set global initialRto=2000
           Write-Host "✅ Rede otimizada"
 
-      # =============================================
-      # 5. GAME MODE + POWER PLAN
-      # =============================================
       - name: 🎯 Game Mode + Power Plan
         run: |
           Write-Host "=== ATIVANDO GAME MODE ==="
@@ -84,9 +69,6 @@ jobs:
           powercfg -setactive scheme_current
           Write-Host "✅ Game Mode ativado"
 
-      # =============================================
-      # 6. WINDOWS DEFENDER KILLER
-      # =============================================
       - name: 🔥 Windows Defender Killer
         run: |
           Write-Host "=== DESATIVANDO WINDOWS DEFENDER ==="
@@ -98,9 +80,6 @@ jobs:
           Set-Service -Name WinDefend -StartupType Disabled -ErrorAction SilentlyContinue
           Write-Host "✅ Windows Defender desativado"
 
-      # =============================================
-      # 7. TEMP FILES CLEANER
-      # =============================================
       - name: 🧹 Temp Files Cleaner
         run: |
           Write-Host "=== LIMPANDO ARQUIVOS TEMPORÁRIOS ==="
@@ -109,9 +88,6 @@ jobs:
           Clear-RecycleBin -Force -ErrorAction SilentlyContinue
           Write-Host "✅ Limpeza concluída"
 
-      # =============================================
-      # 8. REMOVE TEST MODE (VISUAL)
-      # =============================================
       - name: Remove Test Mode
         run: |
           bcdedit /set testsigning off 2>$null
@@ -124,9 +100,6 @@ jobs:
           Start-Sleep -Seconds 2
           Start-Process explorer -ErrorAction SilentlyContinue
 
-      # =============================================
-      # 9. CONFIGURA RDP + FIREWALL (LIBERA PORTAS)
-      # =============================================
       - name: Configure RDP & Firewall
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
@@ -143,14 +116,10 @@ jobs:
                            -Name "MaxYResolution" -Value 1080 -Force
           netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
-          # Portas para Sunshine (caso instale depois)
           netsh advfirewall firewall add rule name="Sunshine-TCP" dir=in action=allow protocol=TCP localport=47984-48010
           netsh advfirewall firewall add rule name="Sunshine-UDP" dir=in action=allow protocol=UDP localport=47998-48010
           Restart-Service -Name TermService -Force
 
-      # =============================================
-      # 10. CRIA USUÁRIO LOCAL
-      # =============================================
       - name: Create User
         run: |
           Add-Type -AssemblyName System.Security
@@ -161,9 +130,6 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Game"
           echo "USER_PASS=Usuário: Game | Senha: $password" >> $env:GITHUB_ENV
 
-      # =============================================
-      # 11. INSTALA TAILSCALE
-      # =============================================
       - name: Install Tailscale
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
@@ -172,9 +138,6 @@ jobs:
           Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
           Remove-Item $installerPath -Force
 
-      # =============================================
-      # 12. CONECTA TAILSCALE
-      # =============================================
       - name: Connect Tailscale
         run: |
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gaming-pro-$env:GITHUB_RUN_ID
@@ -187,13 +150,12 @@ jobs:
           }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
 
-          
+
       # =============================================
-      # 15. MOSTRA INFORMAÇÕES DE ACESSO
+      # SHOW ACCESS INFO (CORRIGIDO - SEM CLEAR-HOST)
       # =============================================
       - name: Show Access Info
         run: |
-          Clear-Host
           Write-Host ""
           Write-Host "╔══════════════════════════════════════════════════════════════════════╗"
           Write-Host "║                                                                     ║"
@@ -228,9 +190,6 @@ jobs:
           Write-Host "╚══════════════════════════════════════════════════════════════════════╝"
           Write-Host ""
 
-      # =============================================
-      # 16. KEEP ALIVE (6 HORAS)
-      # =============================================
       - name: Keep Alive
         run: |
           Write-Host "✅ PC Virtual PRO MAX ativo!"
